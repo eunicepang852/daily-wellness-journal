@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>生活助手 | 節氣養生</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500&display=swap');
+        body { font-family: 'Noto Sans TC', sans-serif; background-color: #F7F3F0; color: #5D4037; }
+        .muji-card { background-color: #FFFFFF; border-radius: 20px; box-shadow: 0 4px 12px rgba(93, 64, 55, 0.05); }
+        .muji-btn { background-color: #8D6E63; color: white; transition: all 0.2s; }
+        .muji-btn:active { transform: scale(0.95); opacity: 0.9; }
+        .tab-active { border-bottom: 2px solid #8D6E63; color: #8D6E63; font-weight: 500; }
+        .accent-text { color: #A1887F; }
+    </style>
+</head>
+<body class="max-w-md mx-auto min-h-screen relative pb-24">
+
+<div id="app">
+    <header class="bg-white px-6 pt-6 sticky top-0 z-20 shadow-sm">
+        <div class="flex justify-between items-center mb-4">
+            <div>
+                <h1 class="text-xl font-medium">健康日誌</h1>
+                <p class="text-[10px] opacity-50 uppercase tracking-widest">Wellness Journal</p>
+            </div>
+            <div class="text-right">
+                <div class="text-sm font-bold text-[#8D6E63]">{{ currentTerm }}</div>
+                <div class="text-[10px] opacity-60">{{ currentDate }}</div>
+            </div>
+        </div>
+        <div class="flex gap-6 text-sm text-stone-400 pb-2">
+            <span @click="tab = 'health'" :class="{'tab-active': tab === 'health'}" class="cursor-pointer pb-2">健康狀態</span>
+            <span @click="tab = 'recommend'" :class="{'tab-active': tab === 'recommend'}" class="cursor-pointer pb-2">節氣食補</span>
+            <span @click="tab = 'recipes'" :class="{'tab-active': tab === 'recipes'}" class="cursor-pointer pb-2">我的食譜</span>
+        </div>
+    </header>
+
+    <section v-if="tab === 'health'" class="p-6 space-y-6">
+        <div class="muji-card p-6">
+            <h2 class="text-lg mb-4 flex items-center"><i class="fas fa-weight mr-2 accent-text"></i>BMI 評估</h2>
+            <div class="grid grid-cols-2 gap-4 mb-4">
+                <input v-model.number="user.height" type="number" placeholder="身高(cm)">
+                <input v-model.number="user.weight" type="number" placeholder="體重(kg)">
+            </div>
+            <div class="flex gap-2 mb-6">
+                <button @click="user.gender = 'M'" :class="user.gender === 'M' ? 'muji-btn' : 'bg-stone-100'" class="flex-1 py-2 rounded-xl text-xs">成年男性</button>
+                <button @click="user.gender = 'F'" :class="user.gender === 'F' ? 'muji-btn' : 'bg-stone-100'" class="flex-1 py-2 rounded-xl text-xs">成年女性</button>
+            </div>
+            <div v-if="bmi" class="text-center p-4 bg-stone-50 rounded-2xl border border-stone-100">
+                <div class="text-xs opacity-50">您的指數</div>
+                <div class="text-3xl font-light my-1">{{ bmi }}</div>
+                <div class="text-xs font-medium px-3 py-1 inline-block rounded-full" :class="bmiClass">{{ bmiStatus }}</div>
+            </div>
+        </div>
+    </section>
+
+    <section v-if="tab === 'recommend'" class="p-6 space-y-6">
+        <div class="bg-[#EAE3DB] p-6 rounded-[30px] relative overflow-hidden">
+            <i class="fas fa-leaf absolute -right-4 -top-4 text-6xl opacity-10"></i>
+            <h2 class="text-lg font-bold mb-2">節氣：{{ currentTerm }}</h2>
+            <p class="text-sm leading-relaxed opacity-80">{{ termIntro }}</p>
+        </div>
+
+        <div class="space-y-4">
+            <h3 class="text-sm font-bold flex items-center"><i class="fas fa-plus-circle mr-2 accent-text"></i>推薦補品/食材</h3>
+            <div v-for="tonic in termTonics" class="muji-card p-4 flex gap-4">
+                <div class="w-12 h-12 muji-btn rounded-full flex items-center justify-center flex-shrink-0">
+                    <i class="fas fa-mortar-pestle"></i>
+                </div>
+                <div>
+                    <div class="font-medium">{{ tonic.name }}</div>
+                    <div class="text-xs opacity-60">{{ tonic.desc }}</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="space-y-4">
+            <h3 class="text-sm font-bold flex items-center"><i class="fas fa-utensils mr-2 accent-text"></i>今日健康中菜</h3>
+            <div v-for="dish in dailyDishes" class="muji-card overflow-hidden">
+                <div class="p-4 flex justify-between items-center">
+                    <div>
+                        <div class="font-medium">{{ dish.name }}</div>
+                        <div class="text-[10px] opacity-50">{{ dish.tag }}</div>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-xs font-bold text-[#8D6E63]">{{ dish.cal }} kcal</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    </div>
+
+<script>
+    const { createApp, ref, computed, onMounted } = Vue
+    createApp({
+        setup() {
+            const tab = ref('recommend')
+            const user = ref({ height: '', weight: '', gender: 'M' })
+            const recipes = ref([])
+            
+            // --- 24 節氣計算邏輯 ---
+            const getSolarTerm = () => {
+                const now = new Date()
+                const month = now.getMonth() + 1
+                const day = now.getDate()
+                
+                // 簡化版節氣判斷邏輯 (大約日期)
+                const terms = [
+                    "小寒","大寒","立春","雨水","驚蟄","春分",
+                    "清明","穀雨","立夏","小滿","芒種","夏至",
+                    "小暑","大暑","立秋","處暑","白露","秋分",
+                    "寒露","霜降","立冬","小雪","大雪","冬至"
+                ]
+                // 每個節氣的大約開始日期 (24節氣)
+                const termDates = [5,20,4,19,5,20,4,20,5,21,5,21,7,22,7,23,7,23,8,23,7,22,7,21]
+                
+                let idx = (month - 1) * 2
+                if (day >= termDates[idx + 1]) idx += 1
+                else if (day < termDates[idx]) idx -= 1
+                
+                if (idx < 0) idx = 23 // 處理跨年冬至
+                return terms[idx]
+            }
+
+            const currentTerm = ref(getSolarTerm())
+            const currentDate = ref(new Date().toLocaleDateString('zh-HK'))
+
+            // --- 根據節氣顯示不同補品與建議 ---
+            const termData = {
+                "冬至": { intro: "陰極之至，陽氣始生。此時應「養藏」，注意保暖。", tonics: [{name:"當歸羊肉湯", desc:"溫中補血，適合虛寒體質。"},{name:"黑芝麻", desc:"補腎益精，暖身抗寒。"}] },
+                "小寒": { intro: "進入一年中最冷的日子。宜溫補，忌生冷。", tonics: [{name:"臘八粥", desc:"健脾養胃，補充體力。"},{name:"紅棗薑茶", desc:"驅寒活血。"}] },
+                "大寒": { intro: "嚴冬最後階段，注意心腦血管保護。", tonics: [{name:"燉烏雞", desc:"滋陰補腎，增強免疫。"},{name:"桂圓", desc:"養心安神。"}] },
+                "立春": { intro: "大地回春，萬物生長。宜「養肝」，少酸多甘。", tonics: [{name:"枸杞茶", desc:"清肝明目。"},{name:"蜂蜜", desc:"潤燥養肝。"}] },
+                // ... 其他節氣可以陸續擴充 ...
+            }
+
+            // 預設預防 (如果節氣資料未完全錄入)
+            const currentTermInfo = computed(() => termData[currentTerm.value] || {
+                intro: `現在是${currentTerm.value}時節，請保持規律生活，均衡飲食。`,
+                tonics: [{name:"時令蔬菜", desc:"補充天然維生素。"},{name:"溫開水", desc:"保持身體代謝平衡。"}]
+            })
+
+            const termIntro = computed(() => currentTermInfo.value.intro)
+            const termTonics = computed(() => currentTermInfo.value.tonics)
+
+            // --- BMI 邏輯 ---
+            const bmi = computed(() => {
+                if (!user.value.height || !user.value.weight) return null
+                return (user.value.weight / Math.pow(user.value.height/100, 2)).toFixed(1)
+            })
+            const bmiStatus = computed(() => {
+                if (bmi.value < 18.5) return '過輕'
+                if (bmi.value < 24) return '標準'
+                return '超重'
+            })
+            const bmiClass = computed(() => {
+                if (bmi.value < 18.5) return 'bg-blue-50 text-blue-600'
+                if (bmi.value < 24) return 'bg-green-50 text-green-600'
+                return 'bg-red-50 text-red-600'
+            })
+
+            const dailyDishes = [
+                { name: '蟲草花燉瘦肉', tag: '溫補肺腎', cal: 210 },
+                { name: '清燉蘿蔔牛腩', tag: '消食暖胃', cal: 350 }
+            ]
+
+            return { 
+                tab, user, currentTerm, currentDate, termIntro, termTonics, 
+                bmi, bmiStatus, bmiClass, dailyDishes 
+            }
+        }
+    }).mount('#app')
+</script>
+</body>
+</html>
