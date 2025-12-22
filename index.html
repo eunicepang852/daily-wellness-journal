@@ -179,7 +179,8 @@
 
 <script>
 const { createApp, ref, computed, onMounted, watch } = Vue
-const API_URL = 'https://api.sheety.co/c1fb791480e9ebd8137b59f1a8c90cec/wellnessDb/sheet1';
+// 替換為你的 Google Apps Script API URL
+const API_URL = 'https://script.google.com/macros/s/AKfycbwqw1PQG1P0V_sCrM9UcV_DJtiZfE4twTpUSrOC2cWbm8j2VL9Mp0qYzDnwZHwZ-w/exec';
 
 createApp({
     setup() {
@@ -198,7 +199,6 @@ createApp({
 
         const checkPassword = () => { if(passInput.value === '1234') isUnlocked.value = true; else alert('密碼錯誤'); }
 
-        // --- 數據庫: 你提供的 30 道中菜 ---
         const dishes = [
             {name:"清蒸鱸魚",tag:"高蛋白/補腦",cal:280}, {name:"蒜蓉西蘭花",tag:"高纖維/抗氧",cal:80},
             {name:"淮山排骨湯",tag:"健脾養胃",cal:320}, {name:"滑蛋蝦仁",tag:"嫩滑低脂",cal:250},
@@ -217,7 +217,6 @@ createApp({
             {name:"手撕包菜",tag:"爽脆纖維",cal:110}, {name:"白灼肥牛響鈴",tag:"滿足感強",cal:450}
         ];
 
-        // --- 數據庫: 24 節氣 ---
         const solarTerms = [
             { name: "立春", date: "2/4", advice: "春氣通於肝。宜多食辛甘發散之品，如韭菜、芽菜、春筍。早起散步，放鬆心情。" },
             { name: "雨水", date: "2/19", advice: "濕氣漸重。宜健脾利濕，少食生冷寒涼，多喝溫熱粥水，注意足部保暖。" },
@@ -245,37 +244,56 @@ createApp({
             { name: "大寒", date: "1/20", advice: "歲末將至。宜溫暖四肢，防風寒。飲食宜溫補與清淡結合。" }
         ];
 
-        // --- 核心邏輯 ---
         const fetchCloudData = async () => {
             isLoading.value = true;
             try {
                 const res = await fetch(API_URL);
                 const data = await res.json();
+                // 處理 GAS 回傳的 sheet1 陣列
                 recipes.value = data.sheet1.reverse().map(i => ({...i, isExpanded: false})) || [];
-            } catch (e) { console.error("Fetch failed"); }
-            finally { isLoading.value = false; }
+            } catch (e) { 
+                console.error("Fetch failed"); 
+            } finally { 
+                isLoading.value = false; 
+            }
         };
 
         const saveToCloud = async () => {
             if (!newR.value.title) return alert('菜名不可為空');
             isSaving.value = true;
             try {
-                const res = await fetch(API_URL, {
+                // GAS POST 請求
+                await fetch(API_URL, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ sheet1: {...newR.value} })
                 });
-                if (res.ok) { await fetchCloudData(); showModal.value = false; newR.value = { title: '', calories: '', image: '', cuisine: '中式', method: '' }; }
-            } catch (e) { alert('同步失敗'); }
-            finally { isSaving.value = false; }
+                
+                // 延遲更新以確保 Google Sheets 完成寫入
+                setTimeout(async () => {
+                    await fetchCloudData();
+                    showModal.value = false;
+                    newR.value = { title: '', calories: '', image: '', cuisine: '中式', method: '' };
+                    isSaving.value = false;
+                }, 1000);
+            } catch (e) { 
+                alert('同步失敗'); 
+                isSaving.value = false;
+            }
         };
 
         const deleteRecipe = async (id) => {
             if (!confirm('確定刪除？')) return;
             try {
-                const res = await fetch(`${API_URL}/${id}`, { method: 'DELETE' });
-                if (res.ok) await fetchCloudData();
-            } catch (e) { alert('刪除失敗'); }
+                // 發送含有 action: DELETE 的指令給 GAS
+                await fetch(API_URL, { 
+                    method: 'POST', 
+                    body: JSON.stringify({ action: 'DELETE', id: id }) 
+                });
+                
+                setTimeout(fetchCloudData, 1000);
+            } catch (e) { 
+                alert('刪除失敗'); 
+            }
         };
 
         const handleImg = (e) => {
@@ -303,12 +321,10 @@ createApp({
         onMounted(fetchCloudData);
         watch(user, (v) => localStorage.setItem('muji_user_v3', JSON.stringify(v)), {deep:true});
 
-        // 判定目前節氣
         const currentSolarTerm = computed(() => {
             const now = new Date();
             const month = now.getMonth() + 1;
             const day = now.getDate();
-            // 找最接近且尚未超過的節氣
             let term = solarTerms[solarTerms.length - 1]; 
             for (let i = 0; i < solarTerms.length; i++) {
                 const [tM, tD] = solarTerms[i].date.split('/').map(Number);
@@ -320,7 +336,6 @@ createApp({
             return term;
         });
 
-        // 根據日期隨機推薦兩道菜
         const dailyDishes = computed(() => {
             const seed = new Date().getDate();
             return [dishes[seed % dishes.length], dishes[(seed + 7) % dishes.length]];
@@ -332,6 +347,7 @@ createApp({
             currentDate: new Date().toLocaleDateString('zh-HK'),
             bmi: computed(() => (user.value.height && user.value.weight) ? (user.value.weight / Math.pow(user.value.height/100, 2)).toFixed(1) : null),
             bmiStatus: computed(() => {
+                if(!user.value.height || !user.value.weight) return '';
                 const b = (user.value.weight / Math.pow(user.value.height/100, 2));
                 return b < 18.5 ? 'Underweight' : b < 24 ? 'Healthy' : 'Overweight';
             }),
